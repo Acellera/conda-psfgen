@@ -1,0 +1,21 @@
+package:
+  name:  psfgen
+  version: {{ environ.get('BUILD_VERSION', "0.0.1" ) }}
+
+
+build:
+  number: {{ environ.get('BUILD_NUMBER', 0 ) }}
+
+source:
+  path: ../../src
+
+ 
+requirements:
+  build:
+    - python
+  run:
+    - python
+   
+about:
+  license: "University of Illinois NAMD Molecular Dynamics Software Non-Exclusive, Non-Commercial Use License"
+  license_file: PSFGEN_LICENCE.txt

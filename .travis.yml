@@ -1,0 +1,50 @@
+git:
+ depth: 3
+branches:
+ only:
+  - master
+
+matrix:
+  include:
+   - os: linux
+     language: generic
+     env: TRAVIS_PYTHON_VERSION=3.4
+   - os: linux
+     language: generic
+     env: TRAVIS_PYTHON_VERSION=3.5
+   - os: osx
+     language: generic
+     env: TRAVIS_PYTHON_VERSION=3.4
+   - os: osx
+     language: generic
+     env: TRAVIS_PYTHON_VERSION=3.5
+
+
+install:
+ - if [ "$TRAVIS_OS_NAME" == "linux" ]; then wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh; fi
+ - if [ "$TRAVIS_OS_NAME" == "osx" ]; then wget https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh; fi
+ - if [ "$TRAVIS_OS_NAME" == "windows" ]; then wget https://repo.continuum.io/miniconda/Miniconda3-latest-Windows-x86_64.sh -O miniconda.sh; fi
+
+ - bash miniconda.sh -b -p $HOME/miniconda
+ - export PATH="$HOME/miniconda/bin:$PATH"
+ - hash -r
+ - conda config --set always_yes yes 
+ - conda update --all -y
+ - conda install anaconda conda-build -y
+ - conda config --add channels omnia
+ - conda config --add channels acellera
+
+ - conda create -q -n travis-env python=$TRAVIS_PYTHON_VERSION 
+ - source activate travis-env
+
+
+ - conda build --python $TRAVIS_PYTHON_VERSION package/psfgen/
+ - conda install psfgen --use-local
+
+script:
+
+after_success:
+ - echo $PATH
+ - anaconda -t $ANACONDA_TOKEN upload  $HOME/miniconda/conda-bld/*-64/psfgen-[0-9]*.tar.bz2 -u acellera || /usr/bin/true 
+
+
