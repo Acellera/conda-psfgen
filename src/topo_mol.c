@@ -1606,7 +1606,7 @@ int topo_mol_multiply_atoms(topo_mol *mol, const topo_mol_ident_t *targets,
     }
     newatom = memarena_alloc(mol->arena,sizeof(topo_mol_atom_t));
     if ( ! newatom ) return -5;
-    memcpy(newatom,atom,sizeof(topo_mol_atom_t));
+    bcopy(newatom,atom,sizeof(topo_mol_atom_t));
     atom->next = newatom;
     atom->copy = newatom;
     newatom->bonds = 0;

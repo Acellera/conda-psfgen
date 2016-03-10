@@ -996,7 +996,7 @@ int topo_mol_write_plugin(topo_mol *mol, const char *pluginname,
           offx = (ia-sa) * images->ax + (ib-sb) * images->bx + (ic-sc) * images->cx;
           offy = (ia-sa) * images->ay + (ib-sb) * images->by + (ic-sc) * images->cy;
           offz = (ia-sa) * images->az + (ib-sb) * images->bz + (ic-sc) * images->cz;
-          memcpy(&atomarray[atomid], atomarray, nmolatoms*sizeof(molfile_atom_t));
+          bcopy(&atomarray[atomid], atomarray, nmolatoms*sizeof(molfile_atom_t));
           for ( ii=0 ; ii < nmolatoms; ++ii, ++atomid ) {
             atomcoords[atomid*3    ] = atomcoords[ii*3]     + offx;
             atomcoords[atomid*3 + 1] = atomcoords[ii*3 + 1] + offy;
