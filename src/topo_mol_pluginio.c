@@ -196,7 +196,7 @@ static int plugin_read_bonds(molfile_plugin_t *plg, void *rv,
     sprintf(msg, "bonds: %d", nbonds);
     print_msg(v, msg);
 
-    for (i=0; i < nbonds; i++) {
+    for (i=nbonds-1; i >= 0; i--) {
       topo_mol_atom_t *atom1, *atom2;
       topo_mol_bond_t *tuple;
       int ind1, ind2;
@@ -252,14 +252,24 @@ static int plugin_read_angles(molfile_plugin_t *plg, void *rv,
             numangles, numdihedrals, numimpropers, numcterms);
     print_msg(v, msg);
 
-    for (i=0; i < numangles; i++) {
+    for (i=numangles-1; i >= 0; i--) {
       topo_mol_angle_t *tuple;
+      int ind1, ind2, ind3;
 
-      atom1 = molatomlist[angles[3*i  ]-1];
-      atom2 = molatomlist[angles[3*i+1]-1];
-      atom3 = molatomlist[angles[3*i+2]-1];
+      ind1 = angles[3*i  ]-1;
+      ind2 = angles[3*i+1]-1;
+      ind3 = angles[3*i+2]-1;
 
-      tuple = memarena_alloc(mol->arena,sizeof(topo_mol_angle_t));
+      if (ind1 < 0 || ind2 < 0 || ind3 < 0 ||
+          ind1 >= natoms || ind2 >= natoms || ind3 >= natoms) {
+        return -1; /* Bad indices, abort now */
+      }
+
+      atom1 = molatomlist[ind1];
+      atom2 = molatomlist[ind2];
+      atom3 = molatomlist[ind3];
+
+      tuple = memarena_alloc(mol->angle_arena,sizeof(topo_mol_angle_t));
       tuple->next[0] = atom1->angles;
       tuple->atom[0] = atom1;
       tuple->next[1] = atom2->angles;
@@ -273,15 +283,26 @@ static int plugin_read_angles(molfile_plugin_t *plg, void *rv,
       atom3->angles = tuple;
     }
 
-    for (i=0; i < numdihedrals; i++) {
+    for (i=numdihedrals-1; i >= 0; i--) {
       topo_mol_dihedral_t *tuple;
+      int ind1, ind2, ind3, ind4;
 
-      atom1 = molatomlist[dihedrals[4*i  ]-1];
-      atom2 = molatomlist[dihedrals[4*i+1]-1];
-      atom3 = molatomlist[dihedrals[4*i+2]-1];
-      atom4 = molatomlist[dihedrals[4*i+3]-1];
+      ind1 = dihedrals[4*i  ]-1;
+      ind2 = dihedrals[4*i+1]-1;
+      ind3 = dihedrals[4*i+2]-1;
+      ind4 = dihedrals[4*i+3]-1;
 
-      tuple = memarena_alloc(mol->arena,sizeof(topo_mol_dihedral_t));
+      if (ind1 < 0 || ind2 < 0 || ind3 < 0 || ind4 < 0 ||
+          ind1 >= natoms || ind2 >= natoms || ind3 >= natoms || ind4 >= natoms) {
+        return -1; /* Bad indices, abort now */
+      }
+
+      atom1 = molatomlist[ind1];
+      atom2 = molatomlist[ind2];
+      atom3 = molatomlist[ind3];
+      atom4 = molatomlist[ind4];
+
+      tuple = memarena_alloc(mol->dihedral_arena,sizeof(topo_mol_dihedral_t));
       tuple->next[0] = atom1->dihedrals;
       tuple->atom[0] = atom1;
       tuple->next[1] = atom2->dihedrals;
@@ -298,13 +319,24 @@ static int plugin_read_angles(molfile_plugin_t *plg, void *rv,
       atom4->dihedrals = tuple;
     }
 
-    for (i=0; i < numimpropers; i++) {
+    for (i=numimpropers-1; i >= 0; i--) {
       topo_mol_improper_t *tuple;
+      int ind1, ind2, ind3, ind4;
  
-      atom1 = molatomlist[impropers[4*i  ]-1];
-      atom2 = molatomlist[impropers[4*i+1]-1];
-      atom3 = molatomlist[impropers[4*i+2]-1];
-      atom4 = molatomlist[impropers[4*i+3]-1];
+      ind1 = impropers[4*i  ]-1;
+      ind2 = impropers[4*i+1]-1;
+      ind3 = impropers[4*i+2]-1;
+      ind4 = impropers[4*i+3]-1;
+
+      if (ind1 < 0 || ind2 < 0 || ind3 < 0 || ind4 < 0 ||
+          ind1 >= natoms || ind2 >= natoms || ind3 >= natoms || ind4 >= natoms) {
+        return -1; /* Bad indices, abort now */
+      }
+
+      atom1 = molatomlist[ind1];
+      atom2 = molatomlist[ind2];
+      atom3 = molatomlist[ind3];
+      atom4 = molatomlist[ind4];
 
       tuple = memarena_alloc(mol->arena,sizeof(topo_mol_improper_t));
       tuple->next[0] = atom1->impropers;
@@ -323,13 +355,18 @@ static int plugin_read_angles(molfile_plugin_t *plg, void *rv,
       atom4->impropers = tuple;
     }
 
-    for (i=0; i < numcterms; i++) {
+    for (i=numcterms-1; i >= 0; i--) {
       topo_mol_atom_t *atoml[8];
       topo_mol_cmap_t *tuple;
+      int indx;
 
       tuple = memarena_alloc(mol->arena,sizeof(topo_mol_cmap_t));
       for (j = 0; j < 8; ++j) {
-        atoml[j] = molatomlist[cterms[8*i+j]-1];
+        indx = cterms[8*i+j]-1;
+        if (indx < 0 || indx >= natoms) {
+          return -1; /* Bad indices, abort now */
+        }
+        atoml[j] = molatomlist[indx];
         tuple->next[j] = atoml[j]->cmaps;
         tuple->atom[j] = atoml[j];
       }
@@ -412,6 +449,9 @@ int topo_mol_read_plugin(topo_mol *mol, const char *pluginname,
   if (!coordinatesonly && !residuesonly) {
     print_msg(v, "Data fields found by plugin:");
   
+    if (optflags & MOLFILE_INSERTION)
+      print_msg(v, "  Insertion code");
+
     if (optflags & MOLFILE_ATOMICNUMBER)
       print_msg(v, "  Atomic number");
 
@@ -507,14 +547,19 @@ int topo_mol_read_plugin(topo_mol *mol, const char *pluginname,
 
     i=0;
     while (i < natoms) {
-      char residbuf[16];
+      char residbuf[16], insertion;
       topo_mol_segment_t *seg;
       topo_mol_residue_t *res;
       topo_mol_atom_t *atomtmp;
       int firstatom, j, residn;
       const char *resid, *segname;
 
-      sprintf(residbuf, "%d", atomarray[i].resid);
+      if ( optflags & MOLFILE_INSERTION ) {
+        insertion = atomarray[i].insertion[0];
+      } else {
+        insertion = '\0';
+      }
+      sprintf(residbuf, "%d%c", atomarray[i].resid, (insertion == ' ' ? '\0' : insertion));
       resid = residbuf;
       residn = atomarray[i].resid;
 
@@ -544,6 +589,7 @@ int topo_mol_read_plugin(topo_mol *mol, const char *pluginname,
       firstatom = i;
 #if 1
       while (i<natoms && (residn == atomarray[i].resid) &&
+             ( !(optflags&MOLFILE_INSERTION) || (insertion == atomarray[i].insertion[0]) ) && 
              !strcmp(segname, atomarray[i].segid)) {
 #else
       while (i<natoms && !strcmp(resid, atomarray[i].resid) &&
@@ -573,6 +619,9 @@ int topo_mol_read_plugin(topo_mol *mol, const char *pluginname,
           atomtmp->z = 0;
           atomtmp->xyz_state = TOPO_MOL_XYZ_VOID;
         }
+        atomtmp->vx = 0;
+        atomtmp->vy = 0;
+        atomtmp->vz = 0;
         atomtmp->partition = 0;
         atomtmp->copy = 0;
         atomtmp->atomid = 0;
@@ -593,6 +642,9 @@ int topo_mol_read_plugin(topo_mol *mol, const char *pluginname,
         res->atoms = atomtmp;
       }
     } 
+
+    if (atomcoords) free(atomcoords);
+    atomcoords = NULL;
 
     /* Check to see if we broke out of the loop prematurely */
     if (i != natoms) {
@@ -621,19 +673,24 @@ int topo_mol_read_plugin(topo_mol *mol, const char *pluginname,
      * read bonds
      */
     if (!coordinatesonly  && !residuesonly && plg->read_bonds != NULL)
-      plugin_read_bonds(plg, rv, mol, natoms, molatomlist, v, print_msg);
+      if ( plugin_read_bonds(plg, rv, mol, natoms, molatomlist, v, print_msg) ) {
+        print_msg(v, "ERROR: failed reading bonds");
+        free(molatomlist);
+        return -1;
+      }
 
 
     /*
      * Read angles/dihedrals/impropers/cross-terms
      */
     if (!coordinatesonly && !residuesonly && plg->read_angles != NULL)
-      plugin_read_angles(plg, rv, mol, natoms, molatomlist, v, print_msg);
+      if( plugin_read_angles(plg, rv, mol, natoms, molatomlist, v, print_msg) ) {
+        print_msg(v, "ERROR: failed reading angles");
+        free(molatomlist);
+        return -1;
+      }
 
 
-
-    if (atomcoords)
-      free(atomcoords);
     free(molatomlist);
   } 
 
@@ -644,7 +701,7 @@ int topo_mol_read_plugin(topo_mol *mol, const char *pluginname,
   if (coordinatesonly) {
     for (i=0; i<natoms; i++) {
       topo_mol_ident_t target;
-      char residbuf[16];
+      char residbuf[16], insertion;
       char stmp[128];
       unsigned int utmp;
       int found=0;
@@ -661,7 +718,12 @@ int topo_mol_read_plugin(topo_mol *mol, const char *pluginname,
       else
         target.segid = segid;
 
-      sprintf(residbuf, "%d", atomarray[i].resid);
+      if ( optflags & MOLFILE_INSERTION ) {
+        insertion = atomarray[i].insertion[0];
+      } else {
+        insertion = '\0';
+      }
+      sprintf(residbuf, "%d%c", atomarray[i].resid, (insertion == ' ' ? '\0' : insertion));
       target.resid = residbuf;
 
 #if 0
@@ -721,7 +783,7 @@ int topo_mol_write_plugin(topo_mol *mol, const char *pluginname,
                           const char *filename, struct image_spec *images,
                           void *v, void (*print_msg)(void *, const char *)) {
   char buf[256];
-  int iseg,nseg,ires,nres,atomid;
+  int iseg,nseg,ires,nres,atomid,resid;
   int ia,ib,ic,ii;
   int has_guessed_atoms = 0;
   double x,y,z,o,b;
@@ -962,10 +1024,15 @@ int topo_mol_write_plugin(topo_mol *mol, const char *pluginname,
         strcpy(atm->name, atom->name);
         strcpy(atm->type, atom->type);
         strcpy(atm->resname, res->name);
-        atm->resid = atoi(res->resid);
-        strcpy(atm->chain, res->chain);
+        if ( res->chain[0] == '\0' ) {
+          strcpy(atm->chain, " ");
+        } else {
+          strcpy(atm->chain, res->chain);
+        }
         strcpy(atm->segid, seg->segid);
-        strcpy(atm->insertion, "");
+        strcpy(atm->insertion, " ");
+        sscanf(res->resid, "%d%c", &resid, atm->insertion);
+        atm->resid = resid;
         strcpy(atm->altloc, "");
         atm->atomicnumber = -1; /* we should be able to do much better */
         atm->occupancy = o;
@@ -996,7 +1063,7 @@ int topo_mol_write_plugin(topo_mol *mol, const char *pluginname,
           offx = (ia-sa) * images->ax + (ib-sb) * images->bx + (ic-sc) * images->cx;
           offy = (ia-sa) * images->ay + (ib-sb) * images->by + (ic-sc) * images->cy;
           offz = (ia-sa) * images->az + (ib-sb) * images->bz + (ic-sc) * images->cz;
-          bcopy(&atomarray[atomid], atomarray, nmolatoms*sizeof(molfile_atom_t));
+          memcpy(&atomarray[atomid], atomarray, nmolatoms*sizeof(molfile_atom_t));
           for ( ii=0 ; ii < nmolatoms; ++ii, ++atomid ) {
             atomcoords[atomid*3    ] = atomcoords[ii*3]     + offx;
             atomcoords[atomid*3 + 1] = atomcoords[ii*3 + 1] + offy;
@@ -1021,7 +1088,7 @@ int topo_mol_write_plugin(topo_mol *mol, const char *pluginname,
   }
 
   /* set flags indicating what data is populated/valid */
-  optflags = MOLFILE_OCCUPANCY | MOLFILE_BFACTOR | 
+  optflags = MOLFILE_INSERTION | MOLFILE_OCCUPANCY | MOLFILE_BFACTOR |
              MOLFILE_MASS | MOLFILE_CHARGE;
 
   /* build bond list here */

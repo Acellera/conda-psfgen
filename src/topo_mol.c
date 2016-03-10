@@ -25,6 +25,8 @@ topo_mol * topo_mol_create(topo_defs *defs) {
 	(void**) &(mol->segment_array), sizeof(topo_mol_segment_t*));
     mol->buildseg = 0;
     mol->arena = memarena_create();
+    mol->angle_arena = memarena_create();
+    mol->dihedral_arena = memarena_create();
     if ( ! mol->segment_hash || ! mol->arena ) {
       topo_mol_destroy(mol);
       return 0;
@@ -47,6 +49,8 @@ void topo_mol_destroy(topo_mol *mol) {
   }
   hasharray_destroy(mol->segment_hash);
   memarena_destroy(mol->arena);
+  memarena_destroy(mol->angle_arena);
+  memarena_destroy(mol->dihedral_arena);
   free((void*)mol);
 }
 
@@ -292,15 +296,37 @@ static topo_mol_atom_t * topo_mol_unlink_atom(
   return oldatom;
 }
 
+static topo_mol_atom_t * topo_mol_find_atom(topo_mol_atom_t **newatoms,
+		topo_mol_atom_t *oldatoms, const char *aname) {
+  topo_mol_atom_t *atom, **newatom;
+  if ( ! oldatoms ) return 0;
+  for ( atom = oldatoms; atom; atom = atom->next ) {
+    if ( ! strcmp(aname,atom->name) ) break;
+  }
+  if ( atom && *newatoms != oldatoms ) {
+    for ( newatom = newatoms; *newatom != oldatoms; newatom = &(*newatom)->next );
+    *newatom = atom->next;
+    atom->next = *newatoms;
+    *newatoms = oldatoms;
+  }
+  return atom;
+}
+
 static int topo_mol_add_atom(topo_mol *mol, topo_mol_atom_t **atoms,
-		topo_mol_atom_t **oldatoms, topo_defs_atom_t *atomdef) {
+		topo_mol_atom_t *oldatoms, topo_defs_atom_t *atomdef) {
   int idef;
   topo_mol_atom_t *atomtmp;
   topo_defs_type_t *atype;
   char errmsg[128];
   if ( ! mol || ! atoms ) return -1;
+  idef = hasharray_index(mol->defs->type_hash,atomdef->type);
+  if ( idef == HASHARRAY_FAIL ) {
+    sprintf(errmsg,"unknown atom type %s",atomdef->type);
+    topo_mol_log_error(mol,errmsg);
+    return -3;
+  }
   atomtmp = 0;
-  if ( oldatoms ) atomtmp = topo_mol_unlink_atom(oldatoms,atomdef->name);
+  if ( oldatoms ) atomtmp = topo_mol_find_atom(atoms,oldatoms,atomdef->name);
   if ( ! atomtmp ) {
     atomtmp = memarena_alloc(mol->arena,sizeof(topo_mol_atom_t));
     if ( ! atomtmp ) return -2;
@@ -314,27 +340,21 @@ static int topo_mol_add_atom(topo_mol *mol, topo_mol_atom_t **atoms,
     atomtmp->x = 0;
     atomtmp->y = 0;
     atomtmp->z = 0;
+    atomtmp->vx = 0;
+    atomtmp->vy = 0;
+    atomtmp->vz = 0;
     atomtmp->xyz_state = TOPO_MOL_XYZ_VOID;
     atomtmp->partition = 0;
     atomtmp->atomid = 0;
+    atomtmp->next = *atoms;
+    *atoms = atomtmp;
   }
   atomtmp->copy = 0;
-  atomtmp->next = *atoms;
   atomtmp->charge = atomdef->charge;
   strcpy(atomtmp->type,atomdef->type);
-  strcpy(atomtmp->element,"");
-  atomtmp->mass = 0;
-  idef = hasharray_index(mol->defs->type_hash,atomtmp->type);
-  if ( idef == HASHARRAY_FAIL ) {
-    sprintf(errmsg,"unknown atom type %s",atomtmp->type);
-    topo_mol_log_error(mol,errmsg);
-    return -3;
-  } else {
-    atype = &(mol->defs->type_array[idef]);
-    strcpy(atomtmp->element,atype->element);
-    atomtmp->mass = atype->mass;
-  }
-  *atoms = atomtmp;
+  atype = &(mol->defs->type_array[idef]);
+  strcpy(atomtmp->element,atype->element);
+  atomtmp->mass = atype->mass;
   return 0;
 }
 
@@ -532,7 +552,7 @@ static int topo_mol_add_angle(topo_mol *mol, const topo_mol_ident_t *targets,
   t3.aname = def->atom3;
   a3 = topo_mol_get_atom(mol,&t3,def->rel3);
   if ( ! a3 ) return -7;
-  tuple = memarena_alloc(mol->arena,sizeof(topo_mol_angle_t));
+  tuple = memarena_alloc(mol->angle_arena,sizeof(topo_mol_angle_t));
   if ( ! tuple ) return -10;
   tuple->next[0] = a1->angles;
   tuple->atom[0] = a1;
@@ -602,7 +622,7 @@ static int topo_mol_add_dihedral(topo_mol *mol, const topo_mol_ident_t *targets,
   t4.aname = def->atom4;
   a4 = topo_mol_get_atom(mol,&t4,def->rel4);
   if ( ! a4 ) return -9;
-  tuple = memarena_alloc(mol->arena,sizeof(topo_mol_dihedral_t));
+  tuple = memarena_alloc(mol->dihedral_arena,sizeof(topo_mol_dihedral_t));
   if ( ! tuple ) return -10;
   tuple->next[0] = a1->dihedrals;
   tuple->atom[0] = a1;
@@ -1208,15 +1228,7 @@ int topo_mol_end(topo_mol *mol) {
     }
   }
 
-  /* apply patches */
-
-  res = &(seg->residue_array[0]);
-  if ( ! strlen(seg->pfirst) ) strcpy(seg->pfirst,"NONE");
-
-  target.segid = seg->segid;
-  target.resid = res->resid;
-  if ( topo_mol_patch(mol, &target, 1, seg->pfirst, 1,
-	seg->auto_angles, seg->auto_dihedrals, firstdefault) ) return -10;
+  /* apply patches, last then first because dipeptide patch ACED depends on CT3 atom NT */
 
   res = &(seg->residue_array[n-1]);
   if ( ! strlen(seg->plast) ) strcpy(seg->plast,"NONE");
@@ -1224,7 +1236,15 @@ int topo_mol_end(topo_mol *mol) {
   target.segid = seg->segid;
   target.resid = res->resid;
   if ( topo_mol_patch(mol, &target, 1, seg->plast, 0,
-	seg->auto_angles, seg->auto_dihedrals, lastdefault) ) return -11;
+	seg->auto_angles, seg->auto_dihedrals, lastdefault) ) return -10;
+
+  res = &(seg->residue_array[0]);
+  if ( ! strlen(seg->pfirst) ) strcpy(seg->pfirst,"NONE");
+
+  target.segid = seg->segid;
+  target.resid = res->resid;
+  if ( topo_mol_patch(mol, &target, 1, seg->pfirst, 1,
+	seg->auto_angles, seg->auto_dihedrals, firstdefault) ) return -11;
 
   if (seg->auto_angles && topo_mol_auto_angles(mol, seg)) return -12;
   if (seg->auto_dihedrals && topo_mol_auto_dihedrals(mol, seg)) return -13;
@@ -1232,8 +1252,93 @@ int topo_mol_end(topo_mol *mol) {
   return 0;
 }
 
+int topo_mol_regenerate_resids(topo_mol *mol) {
+  int ires, nres, iseg, nseg, npres;
+  int prevresid, resid, npatchresptrs, ipatch;
+  topo_mol_segment_t *seg;
+  topo_mol_residue_t *res;
+  topo_mol_patch_t **patchptr, *patch;
+  topo_mol_patchres_t *patchres, **patchresptrs;
+  char newresid[NAMEMAXLEN+20], (*newpatchresids)[NAMEMAXLEN];
+
+  if (! mol) return -1;
+
+  nseg = hasharray_count(mol->segment_hash);
+  npatchresptrs=0;
+
+  /* clean patches so only valid items remain */
+  for ( patchptr = &(mol->patches); *patchptr; ) {
+    npres=0;
+    for ( patchres = (*patchptr)->patchresids; patchres; patchres = patchres->next ) {
+      ++npres;
+      /* Test the existence of segid:resid for the patch */
+      if (!topo_mol_validate_patchres(mol,patch->pname,patchres->segid, patchres->resid)) {
+        break;
+      }
+    }
+    if ( patchres ) {  /* remove patch from list */
+      *patchptr = (*patchptr)->next;
+      continue;
+    }
+    npatchresptrs += npres;
+    patchptr = &((*patchptr)->next);  /* continue to next patch */
+  }
+
+  patchresptrs = malloc(npatchresptrs * sizeof(topo_mol_patchres_t*));
+  if ( ! patchresptrs ) return -5;
+  newpatchresids = calloc(npatchresptrs, NAMEMAXLEN);
+  if ( ! newpatchresids ) return -6;
+
+  for ( ipatch=0, patch = mol->patches; patch; patch = patch->next ) {
+    for ( patchres = patch->patchresids; patchres; patchres = patchres->next ) {
+      patchresptrs[ipatch++] = patchres;
+    }
+  }
+
+  for ( iseg=0; iseg<nseg; ++iseg ) {
+    seg = mol->segment_array[iseg];
+    if ( ! seg ) continue;
+    nres = hasharray_count(seg->residue_hash);
+    if ( hasharray_clear(seg->residue_hash) == HASHARRAY_FAIL ) return -2;
+
+    prevresid = -100000;
+    for ( ires=0; ires<nres; ++ires ) {
+      res = &(seg->residue_array[ires]);
+      resid = atoi(res->resid);
+      if ( resid <= prevresid ) resid = prevresid + 1;
+      sprintf(newresid, "%d", resid);
+      if ( NAMETOOLONG(newresid) ) return -3;
+      if ( strcmp(res->resid, newresid) ) { /* changed, need to check patches */
+        for ( ipatch=0; ipatch < npatchresptrs; ++ipatch ) {
+          if ( ( ! strcmp(seg->segid, patchresptrs[ipatch]->segid) ) &&
+               ( ! strcmp(res->resid, patchresptrs[ipatch]->resid) ) ) {
+            sprintf(newpatchresids[ipatch], "%d", resid);
+          }
+        }
+      }
+      sprintf(res->resid, "%d", resid);
+      if ( hasharray_reinsert(seg->residue_hash,res->resid,ires) != ires ) return -4;
+      prevresid = resid;
+    }
+  }
+
+  for ( ipatch=0; ipatch < npatchresptrs; ++ipatch ) {
+    if ( newpatchresids[ipatch][0] ) {
+      strcpy(patchresptrs[ipatch]->resid,newpatchresids[ipatch]);
+    }
+  }
+
+  free(patchresptrs);
+  free(newpatchresids);
+  return 0;
+}
+
 int topo_mol_regenerate_angles(topo_mol *mol) {
   int errval;
+  if ( mol ) {
+    memarena_destroy(mol->angle_arena);
+    mol->angle_arena = memarena_create();
+  }
   errval = topo_mol_auto_angles(mol,0);
   if ( errval ) {
     char errmsg[128];
@@ -1245,6 +1350,10 @@ int topo_mol_regenerate_angles(topo_mol *mol) {
 
 int topo_mol_regenerate_dihedrals(topo_mol *mol) {
   int errval;
+  if ( mol ) {
+    memarena_destroy(mol->dihedral_arena);
+    mol->dihedral_arena = memarena_create();
+  }
   errval = topo_mol_auto_dihedrals(mol,0);
   if ( errval ) {
     char errmsg[128];
@@ -1252,6 +1361,14 @@ int topo_mol_regenerate_dihedrals(topo_mol *mol) {
     topo_mol_log_error(mol,errmsg);
   }
   return errval;
+}
+
+static int is_hydrogen(topo_mol_atom_t *atom) {
+  return ( atom->mass < 3.5 && atom->name[0] == 'H' );
+}
+
+static int is_oxygen(topo_mol_atom_t *atom) {
+  return ( atom->mass > 14.5 && atom->mass < 18.5 && atom->name[0] == 'O' );
 }
 
 static int topo_mol_auto_angles(topo_mol *mol, topo_mol_segment_t *segp) {
@@ -1273,6 +1390,7 @@ static int topo_mol_auto_angles(topo_mol *mol, topo_mol_segment_t *segp) {
     for ( ires=0; ires<nres; ++ires ) {
       res = &(seg->residue_array[ires]);
       for ( atom = res->atoms; atom; atom = atom->next ) {
+        if ( ! segp ) { atom->angles = NULL; }
         for ( tuple = atom->angles; tuple;
 		tuple = topo_mol_angle_next(tuple,atom) ) {
           tuple->del = 1;
@@ -1300,7 +1418,11 @@ static int topo_mol_auto_angles(topo_mol *mol, topo_mol_segment_t *segp) {
           if ( b2->atom[0] == atom ) a3 = b2->atom[1];
           else if ( b2->atom[1] == atom ) a3 = b2->atom[0];
           else return -6;
-          tuple = memarena_alloc(mol->arena,sizeof(topo_mol_angle_t));
+          if ( is_hydrogen(a2) && ( ! topo_mol_bond_next(b2,atom) ) &&
+               ( ( is_hydrogen(a1) && is_oxygen(a3) ) ||
+                 ( is_hydrogen(a3) && is_oxygen(a1) ) ) )
+            continue;  /* extra H-H bond on water */
+          tuple = memarena_alloc(mol->angle_arena,sizeof(topo_mol_angle_t));
           if ( ! tuple ) return -10;
           tuple->next[0] = a1->angles;
           tuple->atom[0] = a1;
@@ -1322,7 +1444,7 @@ static int topo_mol_auto_angles(topo_mol *mol, topo_mol_segment_t *segp) {
 }
 
 static int topo_mol_auto_dihedrals(topo_mol *mol, topo_mol_segment_t *segp) {
-  int ires, nres, iseg, nseg, found, atomid;
+  int ires, nres, iseg, nseg, found, atomid, count1, count2;
   topo_mol_segment_t *seg;
   topo_mol_residue_t *res;
   topo_mol_angle_t *g1, *g2;
@@ -1340,6 +1462,7 @@ static int topo_mol_auto_dihedrals(topo_mol *mol, topo_mol_segment_t *segp) {
     for ( ires=0; ires<nres; ++ires ) {
       res = &(seg->residue_array[ires]);
       for ( atom = res->atoms; atom; atom = atom->next ) {
+        if ( ! segp ) { atom->dihedrals = NULL; }
         for ( tuple = atom->dihedrals; tuple;
 		tuple = topo_mol_dihedral_next(tuple,atom) ) {
           tuple->del = 1;
@@ -1348,12 +1471,13 @@ static int topo_mol_auto_dihedrals(topo_mol *mol, topo_mol_segment_t *segp) {
     }
   }
 
+  /*  number atoms, needed to avoid duplicate dihedrals below  */
+  /*  assumes no inter-segment bonds if segp is non-null  */
+  atomid = 0;
   for ( iseg=0; iseg<nseg; ++iseg ) {
   seg = segp ? segp : mol->segment_array[iseg];
   if ( ! seg ) continue;
 
-  /*  number atoms, needed to avoid duplicate dihedrals below  */
-  atomid = 0;
   nres = hasharray_count(seg->residue_hash);
   for ( ires=0; ires<nres; ++ires ) {
     res = &(seg->residue_array[ires]);
@@ -1362,6 +1486,8 @@ static int topo_mol_auto_dihedrals(topo_mol *mol, topo_mol_segment_t *segp) {
     }
   }
   }
+
+  count1 = count2 = 0;
 
   for ( iseg=0; iseg<nseg; ++iseg ) {
   seg = segp ? segp : mol->segment_array[iseg];
@@ -1385,12 +1511,14 @@ static int topo_mol_auto_dihedrals(topo_mol *mol, topo_mol_segment_t *segp) {
               a3 = g1->atom[0];  /* == g2->atom[1] */
               a4 = g2->atom[2];
               found = ( a1->atomid < a4->atomid );
+              if ( a1 != a4 ) ++count2;
             } else if ( g2->atom[1] == g1->atom[2] ) {  /*  ABC BCD  */
               a1 = g1->atom[0];
               a2 = g1->atom[1];  /* == g2->atom[0] */
               a3 = g1->atom[2];  /* == g2->atom[1] */
               a4 = g2->atom[2];
               found = ( a1->atomid < a4->atomid );
+              if ( a1 != a4 ) ++count2;
             }
           } else if ( g2->atom[2] == atom ) {  /*  XBX XXB  */
             if ( g2->atom[1] == g1->atom[0] ) {  /*  CBA DCB  */
@@ -1399,16 +1527,19 @@ static int topo_mol_auto_dihedrals(topo_mol *mol, topo_mol_segment_t *segp) {
               a3 = g1->atom[0];  /* == g2->atom[1] */
               a4 = g2->atom[0];
               found = ( a1->atomid < a4->atomid );
+              if ( a1 != a4 ) ++count2;
             } else if ( g2->atom[1] == g1->atom[2] ) {  /*  ABC DCB  */
               a1 = g1->atom[0];
               a2 = g1->atom[1];  /* == g2->atom[2] */
               a3 = g1->atom[2];  /* == g2->atom[1] */
               a4 = g2->atom[0];
               found = ( a1->atomid < a4->atomid );
+              if ( a1 != a4 ) ++count2;
             }
           } else return -6;
           if ( ! found ) continue;
-          tuple = memarena_alloc(mol->arena,sizeof(topo_mol_dihedral_t));
+          ++count1;
+          tuple = memarena_alloc(mol->dihedral_arena,sizeof(topo_mol_dihedral_t));
           if ( ! tuple ) return -10;
           tuple->next[0] = a1->dihedrals;
           tuple->atom[0] = a1;
@@ -1429,6 +1560,8 @@ static int topo_mol_auto_dihedrals(topo_mol *mol, topo_mol_segment_t *segp) {
   }
   }
 
+  if ( count2 != 2 * count1 ) return -15;  /* missing dihedrals */
+
   return 0;
 }
 
@@ -1443,8 +1576,10 @@ int topo_mol_patch(topo_mol *mol, const topo_mol_ident_t *targets,
   topo_defs_angle_t *angldef;
   topo_defs_dihedral_t *dihedef;
   topo_defs_improper_t *imprdef;
+  topo_defs_cmap_t *cmapdef;
   topo_defs_conformation_t *confdef;
-  topo_mol_residue_t *res;
+  topo_mol_residue_t *res, *oldres;
+  topo_mol_atom_t *oldatoms;
   char errmsg[128];
 
   if ( ! mol ) return -1;
@@ -1464,12 +1599,21 @@ int topo_mol_patch(topo_mol *mol, const topo_mol_ident_t *targets,
     return -5;
   }
 
+  oldres = 0;
   for ( atomdef = resdef->atoms; atomdef; atomdef = atomdef->next ) {
     if ( atomdef->res < 0 || atomdef->res >= ntargets ) return -6;
     res = topo_mol_get_res(mol,&targets[atomdef->res],atomdef->rel);
     if ( ! res ) return -7;
-    if ( atomdef->del ) topo_mol_del_atom(res,atomdef->name);
-    else if ( topo_mol_add_atom(mol,&(res->atoms),&(res->atoms),atomdef) ) {
+    if ( atomdef->del ) {
+      topo_mol_del_atom(res,atomdef->name);
+      oldres = 0;
+      continue;
+    }
+    if ( res != oldres ) {
+      oldres = res;
+      oldatoms = res->atoms;
+    }
+    if ( topo_mol_add_atom(mol,&(res->atoms),oldatoms,atomdef) ) {
       sprintf(errmsg,"add atom failed in patch %s",rname);
       topo_mol_log_error(mol,errmsg);
       return -8;
@@ -1509,6 +1653,13 @@ int topo_mol_patch(topo_mol *mol, const topo_mol_ident_t *targets,
     if ( imprdef->del ) topo_mol_del_improper(mol,targets,ntargets,imprdef);
     else if ( topo_mol_add_improper(mol,targets,ntargets,imprdef) ) {
       sprintf(errmsg,"Warning: add improper failed in patch %s",rname);
+      topo_mol_log_error(mol,errmsg);
+    }
+  }
+  for ( cmapdef = resdef->cmaps; cmapdef; cmapdef = cmapdef->next ) {
+    if ( cmapdef->del ) topo_mol_del_cmap(mol,targets,ntargets,cmapdef);
+    else if ( topo_mol_add_cmap(mol,targets,ntargets,cmapdef) ) {
+      sprintf(errmsg,"Warning: add cross-term failed in patch %s",rname);
       topo_mol_log_error(mol,errmsg);
     }
   }
@@ -1606,7 +1757,7 @@ int topo_mol_multiply_atoms(topo_mol *mol, const topo_mol_ident_t *targets,
     }
     newatom = memarena_alloc(mol->arena,sizeof(topo_mol_atom_t));
     if ( ! newatom ) return -5;
-    bcopy(newatom,atom,sizeof(topo_mol_atom_t));
+    memcpy(newatom,atom,sizeof(topo_mol_atom_t));
     atom->next = newatom;
     atom->copy = newatom;
     newatom->bonds = 0;
@@ -1652,7 +1803,7 @@ int topo_mol_multiply_atoms(topo_mol *mol, const topo_mol_ident_t *targets,
       if ( angletmp->atom[0] == atom || ( ! angletmp->atom[0]->copy
       && ( angletmp->atom[1] == atom || ( ! angletmp->atom[1]->copy ) ) ) ) ;
       else continue;
-      tuple = memarena_alloc(mol->arena,sizeof(topo_mol_angle_t));
+      tuple = memarena_alloc(mol->angle_arena,sizeof(topo_mol_angle_t));
       if ( ! tuple ) return -7;
       a1 = angletmp->atom[0]->copy; if ( ! a1 ) a1 = angletmp->atom[0];
       a2 = angletmp->atom[1]->copy; if ( ! a2 ) a2 = angletmp->atom[1];
@@ -1676,7 +1827,7 @@ int topo_mol_multiply_atoms(topo_mol *mol, const topo_mol_ident_t *targets,
       && ( dihetmp->atom[1] == atom || ( ! dihetmp->atom[1]->copy
       && ( dihetmp->atom[2] == atom || ( ! dihetmp->atom[2]->copy ) ) ) ) ) ) ;
       else continue;
-      tuple = memarena_alloc(mol->arena,sizeof(topo_mol_dihedral_t));
+      tuple = memarena_alloc(mol->dihedral_arena,sizeof(topo_mol_dihedral_t));
       if ( ! tuple ) return -8;
       a1 = dihetmp->atom[0]->copy; if ( ! a1 ) a1 = dihetmp->atom[0];
       a2 = dihetmp->atom[1]->copy; if ( ! a2 ) a2 = dihetmp->atom[1];

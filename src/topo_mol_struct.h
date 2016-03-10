@@ -7,7 +7,7 @@
 #include "topo_defs_struct.h"
 #include "topo_mol.h"
 
-#define NAMEMAXLEN 8
+#define NAMEMAXLEN 10
 #define NAMETOOLONG(X) ( strlen(X) >= NAMEMAXLEN )
 
 struct topo_mol_atom_t;
@@ -70,6 +70,7 @@ typedef struct topo_mol_atom_t {
   double mass;
   double charge;
   double x,y,z;
+  double vx,vy,vz;
   int xyz_state;
   int partition;
   int atomid;
@@ -122,6 +123,8 @@ struct topo_mol {
   topo_mol_segment_t *buildseg;
 
   memarena *arena;
+  memarena *angle_arena;
+  memarena *dihedral_arena;
 };
 
 topo_mol_bond_t * topo_mol_bond_next(

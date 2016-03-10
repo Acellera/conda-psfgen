@@ -2,6 +2,7 @@
 #include <string.h>
 #include "psf_file.h"
 #include "psf_file_extract.h"
+#include "pdb_file.h"
 #include "topo_mol_struct.h"
 
 /* General note: in a few places I read various arrays in reverse order. 
@@ -16,11 +17,12 @@
 
 /* Read in all psf atom information using this struct */
 struct psfatom {
-  char name[8];
-  char atype[8];
-  char resname[8];
-  char segname[8];
-  char resid[8];
+  char name[10];
+  char atype[10];
+  char resname[10];
+  char segname[10];
+  char resid[10];
+  char element[3];
   double charge, mass;
 };
 typedef struct psfatom psfatom;
@@ -131,7 +133,7 @@ static int extract_segment_extra_data(FILE *file, topo_mol *mol) {
   return 0;
 }
 
-static int extract_bonds(FILE *file, topo_mol *mol, int natoms, 
+static int extract_bonds(FILE *file, int fw, topo_mol *mol, int natoms, 
                          topo_mol_atom_t **molatomlist) {
 
   int *bonds;
@@ -144,7 +146,7 @@ static int extract_bonds(FILE *file, topo_mol *mol, int natoms,
   }
   bonds = (int *)malloc(2*nbonds*sizeof(int));
 
-  if (psf_get_bonds(file, nbonds, bonds)) {
+  if (psf_get_bonds(file, fw, nbonds, bonds)) {
     free(bonds);
     return -1;
   }
@@ -179,7 +181,7 @@ static int extract_bonds(FILE *file, topo_mol *mol, int natoms,
   return 0;
 }
 
-static int extract_angles(FILE *file, topo_mol *mol, int natoms, 
+static int extract_angles(FILE *file, int fw, topo_mol *mol, int natoms, 
                          topo_mol_atom_t **molatomlist) {
 
   int i, nangles;
@@ -189,7 +191,7 @@ static int extract_angles(FILE *file, topo_mol *mol, int natoms,
   if (nangles < 0) return -1; 
   angles = (int *)malloc(3*nangles*sizeof(int));
 
-  if (psf_get_angles(file, nangles, angles)) {
+  if (psf_get_angles(file, fw, nangles, angles)) {
     free(angles); 
     return -1; 
   } 
@@ -202,7 +204,7 @@ static int extract_angles(FILE *file, topo_mol *mol, int natoms,
     atom2 = molatomlist[angles[3*i+1]-1];
     atom3 = molatomlist[angles[3*i+2]-1];
    
-    tuple = memarena_alloc(mol->arena,sizeof(topo_mol_angle_t));
+    tuple = memarena_alloc(mol->angle_arena,sizeof(topo_mol_angle_t));
     tuple->next[0] = atom1->angles;
     tuple->atom[0] = atom1;
     tuple->next[1] = atom2->angles;
@@ -219,7 +221,7 @@ static int extract_angles(FILE *file, topo_mol *mol, int natoms,
   return 0;
 }
 
-static int extract_dihedrals(FILE *file, topo_mol *mol, int natoms,
+static int extract_dihedrals(FILE *file, int fw, topo_mol *mol, int natoms,
                          topo_mol_atom_t **molatomlist) {
 
   int i, ndihedrals;
@@ -229,7 +231,7 @@ static int extract_dihedrals(FILE *file, topo_mol *mol, int natoms,
   if (ndihedrals < 0) return -1; 
   dihedrals = (int *)malloc(4*ndihedrals*sizeof(int));
 
-  if (psf_get_dihedrals(file, ndihedrals, dihedrals)) {
+  if (psf_get_dihedrals(file, fw, ndihedrals, dihedrals)) {
     free(dihedrals); 
     return -1;
   }
@@ -243,7 +245,7 @@ static int extract_dihedrals(FILE *file, topo_mol *mol, int natoms,
     atom3 = molatomlist[dihedrals[4*i+2]-1];
     atom4 = molatomlist[dihedrals[4*i+3]-1];
 
-    tuple = memarena_alloc(mol->arena,sizeof(topo_mol_dihedral_t));
+    tuple = memarena_alloc(mol->dihedral_arena,sizeof(topo_mol_dihedral_t));
     tuple->next[0] = atom1->dihedrals;
     tuple->atom[0] = atom1;
     tuple->next[1] = atom2->dihedrals;
@@ -263,7 +265,7 @@ static int extract_dihedrals(FILE *file, topo_mol *mol, int natoms,
   return 0;
 }
 
-static int extract_impropers(FILE *file, topo_mol *mol, int natoms,
+static int extract_impropers(FILE *file, int fw, topo_mol *mol, int natoms,
                          topo_mol_atom_t **molatomlist) {
 
   int i, nimpropers;
@@ -273,7 +275,7 @@ static int extract_impropers(FILE *file, topo_mol *mol, int natoms,
   if (nimpropers < 0) return -1; 
   impropers = (int *)malloc(4*nimpropers*sizeof(int));
 
-  if (psf_get_impropers(file, nimpropers, impropers)) {
+  if (psf_get_impropers(file, fw, nimpropers, impropers)) {
     free(impropers); 
     return -1;
   } 
@@ -307,7 +309,7 @@ static int extract_impropers(FILE *file, topo_mol *mol, int natoms,
   return 0;
 }
 
-static int extract_cmaps(FILE *file, topo_mol *mol, int natoms,
+static int extract_cmaps(FILE *file, int fw, topo_mol *mol, int natoms,
                          topo_mol_atom_t **molatomlist) {
 
   int i, j, ncmaps;
@@ -319,7 +321,7 @@ static int extract_cmaps(FILE *file, topo_mol *mol, int natoms,
   }
   cmaps = (int *)malloc(8*ncmaps*sizeof(int));
 
-  if (psf_get_cmaps(file, ncmaps, cmaps)) {
+  if (psf_get_cmaps(file, fw, ncmaps, cmaps)) {
     free(cmaps); 
     return -1;
   } 
@@ -397,12 +399,25 @@ static topo_mol_residue_t *get_residue(topo_mol_segment_t *seg,
 }
 
 
-int psf_file_extract(topo_mol *mol, FILE *file, void *v,
-                                void (*print_msg)(void *, const char *)) {
-  int i, natoms, npatch;
+int psf_file_extract(topo_mol *mol, FILE *file, FILE *pdbfile, FILE *namdbinfile, FILE *velnamdbinfile, 
+                                void *v, void (*print_msg)(void *, const char *)) {
+  int i, natoms, npatch, charmmext;
   psfatom *atomlist;
+  double *atomcoords, *atomvels;
   topo_mol_atom_t **molatomlist;
   long filepos;
+  char inbuf[PSF_RECORD_LENGTH+2];
+
+  /* Read header flags */
+  if (feof(file) || (inbuf != fgets(inbuf, PSF_RECORD_LENGTH+1, file))) {
+    print_msg(v,"ERROR: Unable to read psf file");
+    return -1;
+  }
+  if ( strncmp(inbuf, "PSF", 3) ) {
+    print_msg(v,"ERROR: File does not begin with PSF - wrong format?");
+    return -1;
+  }
+  charmmext = ( strstr(inbuf, "EXT") ? 1 : 0 ); 
 
   /* Read patch info from REMARKS */
   npatch = extract_patches(file, mol);
@@ -414,19 +429,228 @@ int psf_file_extract(topo_mol *mol, FILE *file, void *v,
   }
  
   atomlist = (psfatom *)malloc(natoms * sizeof(psfatom));
-  molatomlist = (topo_mol_atom_t **)malloc(natoms * sizeof(topo_mol_atom_t *));
 
   /* Read in all atoms */
   for (i=0; i<natoms; i++) {
     psfatom *atom = atomlist + i;
+    strcpy(atom->element,"");
     if (psf_get_atom(file, atom->name,atom->atype,atom->resname, atom->segname,
                      atom->resid, &atom->charge, &atom->mass)
         < 0) {
-      print_msg(v,"error reading atoms");
+      print_msg(v,"error reading atoms from psf file");
+      free(atomlist);
       return -1;
     }
   }
+
+  /* Optionally read coordinates, insertion code, and element symbol from PDB file */
+  atomcoords = 0;
+  if ( pdbfile ) {
+    char record[PDB_RECORD_LENGTH+2];
+    int indx, insertions;
+    float x,y,z,o,b;
+    char name[8], resname[8], chain[8];
+    char segname[8], element[8], resid[8], insertion[8];
+
+    atomcoords = (double *)malloc(natoms * 3 * sizeof(double));
+
+    insertions = 0;
+    i=0; 
+    do {
+      if((indx = read_pdb_record(pdbfile, record)) == PDB_ATOM) {
+        psfatom *atom = atomlist + i;
+        if ( i >= natoms ) {
+          print_msg(v,"too many atoms in pdb file");
+          free(atomlist);
+          free(atomcoords);
+          return -1;
+        }
+        get_pdb_fields(record, name, resname, chain,
+                   segname, element, resid, insertion, &x, &y, &z, &o, &b);
+        if ( strncmp(atom->name,name,4) ||
+             strncmp(atom->resname,resname,4) ||
+             strncmp(atom->segname,segname,4) ) {
+          print_msg(v,"atom mismatch in pdb file");
+          print_msg(v,record);
+          free(atomlist);
+          free(atomcoords);
+          return -1;
+        }
+        if ( insertion[0] != ' ' && insertion[0] != '\0' ) {
+          if ( ( strlen(atom->resid ) <= 4 ) && strncmp(atom->resid,resid,4) ) {
+            strncpy(atom->resid,resid,7);  atom->resid[7] = 0;
+            ++insertions;
+          }
+          if ( atom->resid[strlen(atom->resid)-1] != insertion[0] ) {
+            strncat(atom->resid,insertion,1);
+          }
+        }
+        strncpy(atom->element,element,3);  atom->element[2] = 0;
+        atomcoords[i*3    ] = x;
+        atomcoords[i*3 + 1] = y;
+        atomcoords[i*3 + 2] = z;
+        ++i;
+      }
+    } while (indx != PDB_END && indx != PDB_EOF);
+    if ( insertions ) {
+      char buf[80];
+      sprintf(buf, "Found %d mismatched resids with insertion codes in pdb file", insertions);
+      print_msg(v,buf);
+    }
+    if ( i < natoms ) {
+      print_msg(v,"too few atoms in pdb file");
+      free(atomlist);
+      free(atomcoords);
+      return -1;
+    }
+  }
+
+  if ( namdbinfile ) {
+    int numatoms;
+    int filen;
+    int wrongendian;
+    char lenbuf[4];
+    char tmpc;
+    char static_assert_int_is_32_bits[sizeof(int) == 4 ? 1 : -1];
+    if ( ! atomcoords ) {
+      atomcoords = (double *)malloc(natoms * 3 * sizeof(double));
+    }
+    fseek(namdbinfile,0,SEEK_END);
+    numatoms = (ftell(namdbinfile)-4)/24;
+    if (numatoms < 1) {
+      print_msg(v,"namdbin file is too short");
+      free(atomlist);
+      free(atomcoords);
+      return -1;
+    }
+    fseek(namdbinfile,0,SEEK_SET);
+    fread(&filen, sizeof(int), 1, namdbinfile);
+    wrongendian = 0;
+    if (filen != numatoms) {
+      wrongendian = 1;
+      memcpy(lenbuf, (const char *)&filen, 4);
+      tmpc = lenbuf[0]; lenbuf[0] = lenbuf[3]; lenbuf[3] = tmpc;
+      tmpc = lenbuf[1]; lenbuf[1] = lenbuf[2]; lenbuf[2] = tmpc;
+      memcpy((char *)&filen, lenbuf, 4);
+    }
+    if (filen != numatoms) {
+      print_msg(v,"inconsistent atom count in namdbin file");
+      free(atomlist);
+      free(atomcoords);
+      return -1;
+    }
+    if (numatoms < natoms) {
+      print_msg(v,"too few atoms in namdbin file");
+      free(atomlist);
+      free(atomcoords);
+      return -1;
+    }
+    if (numatoms > natoms) {
+      print_msg(v,"too many atoms in namdbin file");
+      free(atomlist);
+      free(atomcoords);
+      return -1;
+    }
+    if (wrongendian) {
+      print_msg(v,"namdbin file appears to be other-endian");
+    }
+    if (fread(atomcoords, sizeof(double), 3 * natoms, namdbinfile)
+                                 != (size_t)(3 * natoms)) {
+      print_msg(v,"error reading data from namdbin file");
+      free(atomlist);
+      free(atomcoords);
+      return -1;
+    }
+    if (wrongendian) {
+      int i;
+      char tmp0, tmp1, tmp2, tmp3;
+      char *cdata = (char *) atomcoords;
+      print_msg(v,"converting other-endian data from namdbin file");
+      for ( i=0; i<3*natoms; ++i, cdata+=8 ) {
+        tmp0 = cdata[0]; tmp1 = cdata[1];
+        tmp2 = cdata[2]; tmp3 = cdata[3];
+        cdata[0] = cdata[7]; cdata[1] = cdata[6];
+        cdata[2] = cdata[5]; cdata[3] = cdata[4];
+        cdata[7] = tmp0; cdata[6] = tmp1;
+        cdata[5] = tmp2; cdata[4] = tmp3;
+      }
+    }
+  }
+
+  atomvels = 0;
+  if ( velnamdbinfile ) {
+    int numatoms;
+    int filen;
+    int wrongendian;
+    char lenbuf[4];
+    char tmpc;
+    char static_assert_int_is_32_bits[sizeof(int) == 4 ? 1 : -1];
+    fseek(velnamdbinfile,0,SEEK_END);
+    numatoms = (ftell(velnamdbinfile)-4)/24;
+    if (numatoms < 1) {
+      print_msg(v,"velnamdbin file is too short");
+      free(atomlist);
+      free(atomcoords);
+      return -1;
+    }
+    fseek(velnamdbinfile,0,SEEK_SET);
+    fread(&filen, sizeof(int), 1, velnamdbinfile);
+    wrongendian = 0;
+    if (filen != numatoms) {
+      wrongendian = 1;
+      memcpy(lenbuf, (const char *)&filen, 4);
+      tmpc = lenbuf[0]; lenbuf[0] = lenbuf[3]; lenbuf[3] = tmpc;
+      tmpc = lenbuf[1]; lenbuf[1] = lenbuf[2]; lenbuf[2] = tmpc;
+      memcpy((char *)&filen, lenbuf, 4);
+    }
+    if (filen != numatoms) {
+      print_msg(v,"inconsistent atom count in namdbin file");
+      free(atomlist);
+      free(atomcoords);
+      return -1;
+    }
+    if (numatoms < natoms) {
+      print_msg(v,"too few atoms in namdbin file");
+      free(atomlist);
+      free(atomcoords);
+      return -1;
+    }
+    if (numatoms > natoms) {
+      print_msg(v,"too many atoms in namdbin file");
+      free(atomlist);
+      free(atomcoords);
+      return -1;
+    }
+    if (wrongendian) {
+      print_msg(v,"namdbin file appears to be other-endian");
+    }
+    atomvels = (double *)malloc(natoms * 3 * sizeof(double));
+    if (fread(atomvels, sizeof(double), 3 * natoms, velnamdbinfile)
+                                 != (size_t)(3 * natoms)) {
+      print_msg(v,"error reading data from namdbin file");
+      free(atomlist);
+      free(atomcoords);
+      free(atomvels);
+      return -1;
+    }
+    if (wrongendian) {
+      int i;
+      char tmp0, tmp1, tmp2, tmp3;
+      char *cdata = (char *) atomcoords;
+      print_msg(v,"converting other-endian data from namdbin file");
+      for ( i=0; i<3*natoms; ++i, cdata+=8 ) {
+        tmp0 = cdata[0]; tmp1 = cdata[1];
+        tmp2 = cdata[2]; tmp3 = cdata[3];
+        cdata[0] = cdata[7]; cdata[1] = cdata[6];
+        cdata[2] = cdata[5]; cdata[3] = cdata[4];
+        cdata[7] = tmp0; cdata[6] = tmp1;
+        cdata[5] = tmp2; cdata[4] = tmp3;
+      }
+    }
+  }
  
+  molatomlist = (topo_mol_atom_t **)malloc(natoms * sizeof(topo_mol_atom_t *));
+
   i=0; 
   while (i < natoms) {
     topo_mol_segment_t *seg;
@@ -468,13 +692,29 @@ int psf_file_extract(topo_mol *mol, FILE *file, void *v,
       atomtmp->conformations = 0;
       strcpy(atomtmp->name, atomlist[i].name);
       strcpy(atomtmp->type, atomlist[i].atype);
-      strcpy(atomtmp->element,"");
+      strcpy(atomtmp->element, atomlist[i].element);
       atomtmp->mass = atomlist[i].mass; 
       atomtmp->charge = atomlist[i].charge;
-      atomtmp->x = 0;       
-      atomtmp->y = 0;       
-      atomtmp->z = 0;       
-      atomtmp->xyz_state = TOPO_MOL_XYZ_VOID;
+      if (atomcoords) {
+        atomtmp->x = atomcoords[i*3    ];
+        atomtmp->y = atomcoords[i*3 + 1];
+        atomtmp->z = atomcoords[i*3 + 2];
+        atomtmp->xyz_state = TOPO_MOL_XYZ_SET;
+      } else {
+        atomtmp->x = 0;       
+        atomtmp->y = 0;       
+        atomtmp->z = 0;       
+        atomtmp->xyz_state = TOPO_MOL_XYZ_VOID;
+      }
+      if (atomvels) {
+        atomtmp->vx = atomvels[i*3    ];
+        atomtmp->vy = atomvels[i*3 + 1];
+        atomtmp->vz = atomvels[i*3 + 2];
+      } else {
+        atomtmp->vx = 0;       
+        atomtmp->vy = 0;       
+        atomtmp->vz = 0;       
+      }
       atomtmp->partition = 0;
       atomtmp->copy = 0;
       atomtmp->atomid = 0;
@@ -495,6 +735,11 @@ int psf_file_extract(topo_mol *mol, FILE *file, void *v,
     }  
   }  
 
+  if (atomcoords) free(atomcoords);
+  atomcoords = 0;
+  if (atomvels) free(atomvels);
+  atomvels = 0;
+
   /* Check to see if we broke out of the loop prematurely */
   if (i != natoms) {
     free(atomlist);
@@ -510,35 +755,35 @@ int psf_file_extract(topo_mol *mol, FILE *file, void *v,
   extract_segment_extra_data(file, mol);
   fseek(file, filepos, SEEK_SET);
 
-  if (extract_bonds(file, mol, natoms, molatomlist)) {
+  if (extract_bonds(file, (charmmext ? 10 : 8), mol, natoms, molatomlist)) {
     print_msg(v,"Error processing bonds");
     free(atomlist);
     free(molatomlist);
     return -1;
   }
  
-  if (extract_angles(file, mol, natoms, molatomlist)) {
+  if (extract_angles(file, (charmmext ? 10 : 8), mol, natoms, molatomlist)) {
     print_msg(v,"Error processing angles");
     free(atomlist);
     free(molatomlist);
     return -1;
   }
 
-  if (extract_dihedrals(file, mol, natoms, molatomlist)) {
+  if (extract_dihedrals(file, (charmmext ? 10 : 8), mol, natoms, molatomlist)) {
     print_msg(v,"Error processing dihedrals");
     free(atomlist);
     free(molatomlist);
     return -1;
   }
 
-  if (extract_impropers(file, mol, natoms, molatomlist)) {
+  if (extract_impropers(file, (charmmext ? 10 : 8), mol, natoms, molatomlist)) {
     print_msg(v,"Error processing impropers");
     free(atomlist);
     free(molatomlist);
     return -1;
   }
 
-  switch (extract_cmaps(file, mol, natoms, molatomlist)) {
+  switch (extract_cmaps(file, (charmmext ? 10 : 8), mol, natoms, molatomlist)) {
   case 0:
     break;
   case 1:
