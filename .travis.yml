@@ -7,9 +7,11 @@ branches:
 matrix:
   include:
    - os: linux
+     dist: precise
      language: generic
      env: TRAVIS_PYTHON_VERSION=3.4
    - os: linux
+     dist: precise
      language: generic
      env: TRAVIS_PYTHON_VERSION=3.5
    - os: osx
