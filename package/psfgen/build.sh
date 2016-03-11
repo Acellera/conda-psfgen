@@ -2,7 +2,7 @@ CC=gcc-4.4
 
 which gcc-4.4
 if [ "$?" != "0" ]; then 
-	CC?=gcc
+	CC=gcc
 fi
 
 
