@@ -9,6 +9,7 @@ build:
    - FC
    - CC
    - CXX
+   - TRAVIS_OS_NAME
 
 
 source:
@@ -17,9 +18,9 @@ source:
  
 requirements:
   build:
-    - python
+    - python >=2.7
   run:
-    - python
+    - python >=2.7
    
 about:
   license: "University of Illinois NAMD Molecular Dynamics Software Non-Exclusive, Non-Commercial Use License"
