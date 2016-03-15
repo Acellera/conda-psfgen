@@ -13,7 +13,9 @@ matrix:
        packages:
        - binutils-mingw-w64-x86-64
        - gcc-mingw-w64-x86_64
-       - mingw-w64-dev mingw-w64-tools mingw-w64
+       - mingw-w64-dev 
+       - mingw-w64-tools 
+       - mingw-w64
 
    - os: linux
      dist: precise
