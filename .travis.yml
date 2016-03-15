@@ -11,8 +11,7 @@ matrix:
      addons:
       apt:
        packages:
-       - gcc-mingw-w64-x86-64
-
+       - mingw-w64
    - os: linux
      dist: precise
      language: generic
@@ -23,7 +22,6 @@ matrix:
        - gfortran-4.4
        - gcc-4.4
        - tcl-dev
-
    - os: osx
      language: generic
      env: TRAVIS_PYTHON_VERSION=3.4 CC=gcc FC=gfortran
