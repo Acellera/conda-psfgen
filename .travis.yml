@@ -11,7 +11,9 @@ matrix:
      addons:
       apt:
        packages:
-       - binutils-mingw-w64-i686 gcc-mingw-w64-i686 g++-mingw-w64-i686 wine
+       - binutils-mingw-w64-x86-64
+       - gcc-mingw-w64-x86_64
+       - mingw-w64-dev mingw-w64-tools mingw-w64
 
    - os: linux
      dist: precise
