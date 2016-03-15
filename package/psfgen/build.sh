@@ -5,7 +5,7 @@ CFLAGS=""
 LIBS="-ltcl"
 if [ "$TRAVIS_OS_NAME" == "linux" ]; then
  CFLAGS="--static"
- LIBS="-ltcl -lpthread -ldl -lrt"
+ LIBS="-ltcl -lpthread -ldl -lrt -lm"
 fi
 if [ "$CROSS_COMPILE" == "1" ]; then
  CC=x86_64-w64-mingw32-gcc
