@@ -10,6 +10,7 @@ build:
    - CC
    - CXX
    - TRAVIS_OS_NAME
+   - CROSS_COMPILE
 
 
 source:
