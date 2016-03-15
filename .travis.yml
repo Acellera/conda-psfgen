@@ -6,8 +6,9 @@ matrix:
   include:
    - os: linux
      dist: precise
-     language: c
-     compiler: gcc
+#     language: c
+#     compiler: gcc
+     language: generic
      env: TRAVIS_PYTHON_VERSION=3.4 CC=/usr/bin/x86_64-w64-mingw32-gcc CROSS=1
      addons:
       apt:
