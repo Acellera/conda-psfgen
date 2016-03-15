@@ -1,0 +1,28 @@
+environment:
+ binstar_token:
+  secure:  XXXX
+
+  global:
+  CMD_IN_ENV: "cmd /E:ON /V:ON /C .\\continuous-integration\\appveyor\\run_with_env.cmd"
+
+ matrix:
+  - PYTHON: "C:\\Python34_64"
+    PYTHON_VERSION: "3.4"
+    PYTHON_ARCH: "64"
+    CONDA_PY: "34"
+
+install:
+ - powershell .\\continuous-integration\\appveyor\\install.ps1
+ - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+
+build: false
+
+ - "%CMD_IN_ENV% conda build package/psfgen"
+ - "python continuous-integration\move-conda-package.py package/psfgen"
+
+artifacts:
+ - path: '*.tar.bz2'
+
+on_success:
+ - python continuous-integration\binstar-push.py
+
