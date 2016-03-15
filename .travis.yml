@@ -6,16 +6,15 @@ matrix:
   include:
    - os: linux
      dist: precise
-     language: generic
+     language: c
+     compiler: gcc
      env: TRAVIS_PYTHON_VERSION=3.4 CC=/usr/bin/x86_64-w64-mingw32-gcc CROSS=1
      addons:
       apt:
        packages:
-       - binutils-mingw-w64-x86-64
-       - gcc-mingw-w64-x86_64
+       - gcc-mingw-w64-i686
+       - binutils-mingw-w64-i686
        - mingw-w64-dev 
-       - mingw-w64-tools 
-       - mingw-w64
 
    - os: linux
      dist: precise
