@@ -3,6 +3,12 @@ if [ "$CXX" == "" ]; then CXX=g++-4.4; fi
 
 CFLAGS=""
 LIBS="-ltcl"
+
+if [ "$TRAVIS_OS_NAME" == "<UNDEFINED>" ]; then
+ CC=gcc
+ LIBS="-L$PREFIX/lib -ltcl"
+fi
+
 if [ "$TRAVIS_OS_NAME" == "linux" ]; then
  CFLAGS="--static"
  LIBS="-ltcl -lpthread -ldl -lrt -lm"
