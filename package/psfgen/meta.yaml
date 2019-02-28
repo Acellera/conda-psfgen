@@ -2,7 +2,6 @@ package:
   name:  psfgen
   version: {{ environ.get('BUILD_VERSION', "0.0.1" ) }}
 
-
 build:
   number: {{ environ.get('BUILD_NUMBER', 0 ) }}
   script_env:
@@ -12,16 +11,8 @@ build:
    - TRAVIS_OS_NAME
    - CROSS_COMPILE
 
-
 source:
   path: ../../src
-
- 
-requirements:
-  build:
-    - python >=2.7
-  run:
-    - python >=2.7
    
 about:
   license: "University of Illinois NAMD Molecular Dynamics Software Non-Exclusive, Non-Commercial Use License"
