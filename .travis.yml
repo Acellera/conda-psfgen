@@ -23,7 +23,7 @@ matrix:
        - gfortran-4.4
        - gcc-4.4
        - tcl-dev
-       
+
    - os: osx
      language: generic
      env: TRAVIS_PYTHON_VERSION=3.6 CC=gcc FC=gfortran
@@ -37,7 +37,7 @@ install:
  - hash -r
  - conda config --set always_yes yes 
  - conda update --all -y
- - conda install anaconda conda-build -y
+ - conda install anaconda-client conda-build -y
 
  - conda create -q -n travis-env python=$TRAVIS_PYTHON_VERSION 
  - source activate travis-env
@@ -56,9 +56,8 @@ script:
 after_success:
  - export PATH="$HOME/miniconda/bin:$PATH"
  - echo $PATH
- - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "$TRAVIS_TAG" ]; anaconda -t $ANACONDA_TOKEN upload  $HOME/miniconda/conda-bld/*-64/psfgen-[0-9]*.tar.bz2 -u acellera 
- - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "$TRAVIS_TAG" ]; anaconda -t $ANACONDA_TOKEN upload  $HOME/miniconda/conda-bld/*-64/psfgen-[0-9]*.tar.bz2 -u acellera-basic
- - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "$TRAVIS_TAG" ]; && [ "$CROSS_COMPILE" == "1" ]; then conda convert -f -p win-64 $HOME/miniconda/conda-bld/*-64/psfgen-[0-9]*.tar.bz2; anaconda -t $ANACONDA_TOKEN upload win-64/psfgen*bz2 -u acellera ;  anaconda -t $ANACONDA_TOKEN upload win-64/psfgen*bz2 -u acellera-basic ; fi
+ - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "$TRAVIS_TAG" ]; anaconda -t $ANACONDA_TOKEN upload  $HOME/miniconda/conda-bld/*-64/psfgen-[0-9]*.tar.bz2 -u acellera ; fi
+ - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "$TRAVIS_TAG" ] && [ "$CROSS_COMPILE" == "1" ]; then conda convert -f -p win-64 $HOME/miniconda/conda-bld/*-64/psfgen-[0-9]*.tar.bz2; anaconda -t $ANACONDA_TOKEN upload win-64/psfgen*bz2 -u acellera ;  anaconda -t $ANACONDA_TOKEN upload win-64/psfgen*bz2 -u acellera-basic ; fi
 
 
 
