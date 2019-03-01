@@ -1,5 +1,5 @@
 psfgen:
-	$(CC) $(CFLAGS) -o psfgen *.c -I$(TRAVIS_BUILD_DIR)/tcl/include -L$(TRAVIS_BUILD_DIR)/tcl/lib $(LIBS) -lm
+	$(CC) $(CFLAGS) -o psfgen *.c $(INCLUDES) $(LIBS)
 
 clean:
 	rm -f *.o psfgen

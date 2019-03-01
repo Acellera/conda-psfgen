@@ -2,6 +2,7 @@ if [ "$CC" == "" ] ; then CC=gcc-4.4;  fi
 if [ "$CXX" == "" ]; then CXX=g++-4.4; fi
 
 CFLAGS=""
+INCLUDES=""
 LIBS="-ltcl8.6"
 
 if [ "$TRAVIS_OS_NAME" == "<UNDEFINED>" ]; then
@@ -11,17 +12,20 @@ fi
 
 if [ "$TRAVIS_OS_NAME" == "linux" ]; then
  CFLAGS="--static -O3 -fexpensive-optimizations -ffast-math"
- LIBS="-ltcl8.6 -lpthread -ldl -lrt -lm"
+ LIBS="-L$TRAVIS_BUILD_DIR/tcl/lib -ltcl8.6 -lpthread -ldl -lrt -lm"
+ INCLUDES="-I$TRAVIS_BUILD_DIR/tcl/include"
 fi
 if [ "$CROSS_COMPILE" == "1" ]; then
  CC=x86_64-w64-mingw32-gcc
- LIBS="-Llib -ltcl8.6"
+ LIBS="-L$HOME/miniconda/lib -Llib -ltcl86 -lm"
+ INCLUDES="-I$HOME/miniconda/include"
 fi
 if [ "$TRAVIS_OS_NAME" == "osx" ]; then
- LIBS="-ltcl8.6"
+ LIBS="-L$HOME/miniconda/lib -ltcl -lm"
+ INCLUDES="-I$HOME/miniconda/include"
 fi
 
-make "TRAVIS_BUILD_DIR=$TRAVIS_BUILD_DIR" "CC=$CC" "CXX=$CXX" "CFLAGS=$CFLAGS" "LIBS=$LIBS"
+make "CC=$CC" "CXX=$CXX" "CFLAGS=$CFLAGS" "LIBS=$LIBS" "INCLUDES=$INCLUDES"
 mkdir -p "$PREFIX/bin"
 cp psfgen "$PREFIX/bin/psfgen"
 
