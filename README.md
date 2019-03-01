@@ -11,12 +11,14 @@ cp ./namd/psfgen/src/* ./conda-psfgen/src/
 ```
 
 To update the tcl libraries find the last release commit in https://github.com/tcltk/tcl/releases
+Build it on a Ubuntu-PrecisePuppy VM with gcc-4.4
 ```
 cd ..
 git clone https://github.com/tcltk/tcl.git
 cd tcl
 git checkout RELEASECOMMIT
 cd unix
+export CC=gcc-4.4
 ./configure --enable-shared=no --prefix $HOME/tcl/unix/build/
 make
 make install

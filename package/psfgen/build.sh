@@ -21,7 +21,7 @@ if [ "$TRAVIS_OS_NAME" == "osx" ]; then
  LIBS="-ltcl8.6"
 fi
 
-make "CC=$CC" "CXX=$CXX" "CFLAGS=$CFLAGS" "LIBS=$LIBS"
+make "TRAVIS_BUILD_DIR=$TRAVIS_BUILD_DIR" "CC=$CC" "CXX=$CXX" "CFLAGS=$CFLAGS" "LIBS=$LIBS"
 mkdir -p "$PREFIX/bin"
 cp psfgen "$PREFIX/bin/psfgen"
 

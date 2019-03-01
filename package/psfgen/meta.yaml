@@ -10,6 +10,7 @@ build:
    - CXX
    - TRAVIS_OS_NAME
    - CROSS_COMPILE
+   - TRAVIS_BUILD_DIR
 
 source:
   path: ../../src
