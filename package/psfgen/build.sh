@@ -21,7 +21,7 @@ if [ "$CROSS_COMPILE" == "1" ]; then
  INCLUDES="-I$HOME/miniconda/include"
 fi
 if [ "$TRAVIS_OS_NAME" == "osx" ]; then
- LIBS="-L$HOME/miniconda/lib -ltcl -lm"
+ LIBS="-L$HOME/miniconda/lib -ltcl8.6 -lm"
  INCLUDES="-I$HOME/miniconda/include"
 fi
 
