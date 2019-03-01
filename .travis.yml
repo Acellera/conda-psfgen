@@ -48,7 +48,7 @@ install:
   - if git describe --tags; then export BUILD_VERSION=$(git describe --tags | sed 's/-/ /g' | awk '{print $1}'); fi
   # - export BUILD_NUMBER=$(git describe --tags | sed 's/-/ /g' | awk '{print $2}')
 
-  - ldconfig -p | grep libtcl
+
   - ls -l $HOME/miniconda/lib/libtcl*
   - conda build --no-include-recipe package/psfgen/
   - conda install psfgen --use-local
