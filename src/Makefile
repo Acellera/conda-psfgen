@@ -1,5 +1,5 @@
 psfgen:
-	$(CC) $(CFLAGS) -o psfgen *.c -I$(HOME)/conda-forge/tcl/include -L$(HOME)/conda-forge/tcl/lib $(LIBS) -lm
+	$(CC) $(CFLAGS) -o psfgen *.c -I$(TRAVIS_BUILD_DIR)/tcl/include -L$(TRAVIS_BUILD_DIR)/tcl/lib $(LIBS) -lm
 
 clean:
 	rm -f *.o psfgen
