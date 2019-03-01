@@ -10,7 +10,7 @@ if [ "$TRAVIS_OS_NAME" == "<UNDEFINED>" ]; then
 fi
 
 if [ "$TRAVIS_OS_NAME" == "linux" ]; then
- CFLAGS="--static"
+ CFLAGS="--static -O3 -fexpensive-optimizations -ffast-math"
  LIBS="-ltcl -lpthread -ldl -lrt -lm"
 fi
 if [ "$CROSS_COMPILE" == "1" ]; then
