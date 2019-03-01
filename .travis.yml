@@ -56,5 +56,5 @@ script:
 after_success:
   - export PATH="$HOME/miniconda/bin:$PATH"
   - echo $PATH
-  - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "$TRAVIS_TAG" ]; anaconda -t $ANACONDA_TOKEN upload  $HOME/miniconda/conda-bld/*-64/psfgen-[0-9]*.tar.bz2 -u acellera ; fi
+  - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "$TRAVIS_TAG" ]; then anaconda -t $ANACONDA_TOKEN upload  $HOME/miniconda/conda-bld/*-64/psfgen-[0-9]*.tar.bz2 -u acellera ; fi
   - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "$TRAVIS_TAG" ] && [ "$CROSS_COMPILE" == "1" ]; then conda convert -f -p win-64 $HOME/miniconda/conda-bld/*-64/psfgen-[0-9]*.tar.bz2; anaconda -t $ANACONDA_TOKEN upload win-64/psfgen*bz2 -u acellera ;  anaconda -t $ANACONDA_TOKEN upload win-64/psfgen*bz2 -u acellera-basic ; fi
