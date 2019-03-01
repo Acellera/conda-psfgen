@@ -30,6 +30,7 @@ matrix:
 
 install:
   - ldconfig -p | grep libtcl
+  - repoquery -l tcl | grep lib
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh; fi
   - if [ "$TRAVIS_OS_NAME" == "osx" ]; then wget https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh; fi
 
@@ -50,6 +51,7 @@ install:
   - export BUILD_NUMBER=0
 
   - ldconfig -p | grep libtcl
+  - repoquery -l tcl | grep lib
   - conda build --no-include-recipe package/psfgen/
   - conda install psfgen --use-local
 
